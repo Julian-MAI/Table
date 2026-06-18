@@ -242,6 +242,7 @@
       height: auto;
       min-height: 22px;
       display: inline-block;
+      padding: 1px 3px;
       border-bottom: 1px solid transparent;
       line-height: 1.35;
       text-align: center;
@@ -538,6 +539,14 @@
         overflow-wrap: anywhere;
       }
 
+      .mini-input {
+        min-width: 36px;
+        min-height: 32px;
+        padding: 4px 3px;
+        line-height: 1.45;
+        touch-action: manipulation;
+      }
+
       .cell-editor {
         min-height: 32px;
         padding: 4px 2px;
@@ -576,7 +585,7 @@
 <body>
   <div class="sheet-wrap">
     <div class="toolbar">
-<button class="save-button secondary" type="button" id="saveHtmlButton">保存HTML</button>
+      <button class="save-button secondary" type="button" id="saveHtmlButton">保存HTML</button>
     </div>
     <form>
       <div class="sheet-viewport" id="sheetViewport">
@@ -975,7 +984,7 @@
   <div class="cell-tooltip" id="lockedCellTooltip" role="tooltip" hidden></div>
   <script>
     const saveHtmlButton = document.getElementById("saveHtmlButton");
-const lockedCellTooltip = document.getElementById("lockedCellTooltip");
+    const lockedCellTooltip = document.getElementById("lockedCellTooltip");
 
     function syncFormStateForSave(root) {
       root.querySelectorAll("input, textarea").forEach((input) => {
@@ -1004,13 +1013,16 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const link = document.createElement("a");
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
+      const objectUrl = URL.createObjectURL(blob);
 
-      link.href = URL.createObjectURL(blob);
+      link.href = objectUrl;
       link.download = `product-form-${timestamp}.html`;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      URL.revokeObjectURL(link.href);
+      window.setTimeout(() => {
+        URL.revokeObjectURL(objectUrl);
+      }, 0);
     }
 
     saveHtmlButton?.addEventListener("click", saveCurrentHtml);
@@ -1151,13 +1163,25 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       document.querySelectorAll(".mini-input").forEach(resizeMiniInput);
     });
 
+    function focusField(field) {
+      try {
+        field.focus({ preventScroll: true });
+      } catch (error) {
+        field.focus();
+      }
+    }
+
     document.querySelectorAll(".line-input, .mini-input").forEach((field) => {
       field.addEventListener("pointerdown", (event) => {
         event.stopPropagation();
+        if (field.classList.contains("mini-input") && event.pointerType !== "mouse") {
+          focusField(field);
+        }
       });
 
       field.addEventListener("touchstart", (event) => {
         event.stopPropagation();
+        focusField(field);
       }, { passive: true });
 
       field.addEventListener("click", (event) => {
