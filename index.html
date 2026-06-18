@@ -585,7 +585,7 @@
 <body>
   <div class="sheet-wrap">
     <div class="toolbar">
-      <button class="save-button secondary" type="button" id="saveHtmlButton">保存HTML</button>
+<button class="save-button secondary" type="button" id="saveHtmlButton">保存HTML</button>
     </div>
     <form>
       <div class="sheet-viewport" id="sheetViewport">
@@ -984,7 +984,7 @@
   <div class="cell-tooltip" id="lockedCellTooltip" role="tooltip" hidden></div>
   <script>
     const saveHtmlButton = document.getElementById("saveHtmlButton");
-    const lockedCellTooltip = document.getElementById("lockedCellTooltip");
+const lockedCellTooltip = document.getElementById("lockedCellTooltip");
 
     function syncFormStateForSave(root) {
       root.querySelectorAll("input, textarea").forEach((input) => {
@@ -1013,16 +1013,13 @@
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const link = document.createElement("a");
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
-      const objectUrl = URL.createObjectURL(blob);
 
-      link.href = objectUrl;
+      link.href = URL.createObjectURL(blob);
       link.download = `product-form-${timestamp}.html`;
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.setTimeout(() => {
-        URL.revokeObjectURL(objectUrl);
-      }, 0);
+      URL.revokeObjectURL(link.href);
     }
 
     saveHtmlButton?.addEventListener("click", saveCurrentHtml);
