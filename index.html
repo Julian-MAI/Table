@@ -93,7 +93,22 @@
       width: var(--sheet-width);
       max-width: 100%;
       margin: 0 auto;
-      overflow: hidden;
+      overflow-x: auto;
+      overflow-y: visible;
+      touch-action: pan-y;
+    }
+
+    .sheet-scale {
+      width: 100%;
+      transform-origin: 0 0;
+    }
+
+    .sheet-viewport.is-pinching {
+      user-select: none;
+    }
+
+    .sheet-scale table.sheet {
+      transform-origin: 0 0;
     }
 
     col.c1 { width: 10.8%; }
@@ -589,6 +604,7 @@
     </div>
     <form>
       <div class="sheet-viewport" id="sheetViewport">
+      <div class="sheet-scale" id="sheetScale">
       <table class="sheet" aria-label="产品要素表">
         <colgroup>
           <col class="c1">
@@ -630,7 +646,7 @@
         </tr>
         <tr>
           <td class="label">管理人银行账号</td>
-          <td colspan="3"><input class="line-input" type="text" aria-label="管理人银行账号"></td>
+          <td colspan="3"><input class="line-input digits-only" type="text" inputmode="numeric" pattern="[0-9]*" aria-label="管理人银行账号"></td>
           <td class="label">管理人银行账号开户行</td>
           <td colspan="3"><input class="line-input" type="text" aria-label="开户行"></td>
         </tr>
@@ -835,7 +851,7 @@
         </tr>
         <tr>
           <td class="label">关联交易决策机制</td>
-          <td colspan="7"><input class="line-input" type="text" aria-label="关联交易决策机制"></td>
+          <td colspan="7" class="small">关联交易投资决策应当经【<input class="mini-input" type="text" aria-label="关联交易审批机构">】审批通过后方可执行。</td>
         </tr>
 
         <tr>
@@ -979,12 +995,129 @@
         </tr>
       </table>
       </div>
+      </div>
     </form>
   </div>
   <div class="cell-tooltip" id="lockedCellTooltip" role="tooltip" hidden></div>
   <script>
     const saveHtmlButton = document.getElementById("saveHtmlButton");
 const lockedCellTooltip = document.getElementById("lockedCellTooltip");
+    const sheetViewport = document.getElementById("sheetViewport");
+    const sheetScale = document.getElementById("sheetScale");
+    const sheetTable = sheetViewport?.querySelector(".sheet");
+    const minSheetZoom = 1;
+    const maxSheetZoom = 3;
+    const pinchActivationDistance = 4;
+    let sheetZoom = 1;
+    let pinchStartDistance = 0;
+    let pinchStartZoom = 1;
+    let pinchStartCenter = null;
+    let pinchStartScroll = null;
+    let isSheetPinching = false;
+
+    function clamp(value, min, max) {
+      return Math.min(max, Math.max(min, value));
+    }
+
+    function getTouchDistance(touches) {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    }
+
+    function getTouchCenter(touches) {
+      return {
+        x: (touches[0].clientX + touches[1].clientX) / 2,
+        y: (touches[0].clientY + touches[1].clientY) / 2,
+      };
+    }
+
+    function applySheetZoom(nextZoom) {
+      if (!sheetScale || !sheetTable) {
+        return;
+      }
+
+      sheetZoom = clamp(nextZoom, minSheetZoom, maxSheetZoom);
+      sheetTable.style.transform = sheetZoom === 1 ? "" : `scale(${sheetZoom})`;
+      sheetScale.style.width = sheetZoom === 1 ? "" : `${sheetTable.offsetWidth * sheetZoom}px`;
+      sheetScale.style.height = sheetZoom === 1 ? "" : `${sheetTable.offsetHeight * sheetZoom}px`;
+    }
+
+    function preservePinchCenter() {
+      if (!sheetViewport || !pinchStartCenter || !pinchStartScroll) {
+        return;
+      }
+
+      const rect = sheetViewport.getBoundingClientRect();
+      const startLocalX = pinchStartCenter.x - rect.left + pinchStartScroll.left;
+      const zoomRatio = sheetZoom / pinchStartZoom;
+
+      sheetViewport.scrollLeft = startLocalX * zoomRatio - (pinchStartCenter.x - rect.left);
+    }
+
+    function endSheetPinch() {
+      pinchStartDistance = 0;
+      pinchStartCenter = null;
+      pinchStartScroll = null;
+      isSheetPinching = false;
+      sheetViewport?.classList.remove("is-pinching");
+    }
+
+    if (sheetViewport && sheetScale && sheetTable) {
+      sheetViewport.addEventListener("touchstart", (event) => {
+        if (event.touches.length !== 2) {
+          return;
+        }
+
+        pinchStartDistance = getTouchDistance(event.touches);
+        pinchStartZoom = sheetZoom;
+        pinchStartCenter = getTouchCenter(event.touches);
+        pinchStartScroll = {
+          left: sheetViewport.scrollLeft,
+          top: sheetViewport.scrollTop,
+        };
+      }, { passive: true });
+
+      sheetViewport.addEventListener("touchmove", (event) => {
+        if (event.touches.length !== 2 || pinchStartDistance <= 0) {
+          return;
+        }
+
+        const currentDistance = getTouchDistance(event.touches);
+        if (!isSheetPinching && Math.abs(currentDistance - pinchStartDistance) < pinchActivationDistance) {
+          return;
+        }
+
+        isSheetPinching = true;
+        sheetViewport.classList.add("is-pinching");
+        event.preventDefault();
+        applySheetZoom(pinchStartZoom * currentDistance / pinchStartDistance);
+        preservePinchCenter();
+      }, { passive: false });
+
+      sheetViewport.addEventListener("touchend", (event) => {
+        if (event.touches.length >= 2) {
+          return;
+        }
+
+        endSheetPinch();
+      });
+
+      sheetViewport.addEventListener("touchcancel", endSheetPinch);
+
+      sheetViewport.addEventListener("gesturestart", (event) => {
+        event.preventDefault();
+        pinchStartZoom = sheetZoom;
+        sheetViewport.classList.add("is-pinching");
+      });
+
+      sheetViewport.addEventListener("gesturechange", (event) => {
+        event.preventDefault();
+        applySheetZoom(pinchStartZoom * event.scale);
+      });
+
+      sheetViewport.addEventListener("gestureend", endSheetPinch);
+    }
 
     function syncFormStateForSave(root) {
       root.querySelectorAll("input, textarea").forEach((input) => {
@@ -1002,6 +1135,8 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
     }
 
     function saveCurrentHtml() {
+      const savedSheetZoom = sheetZoom;
+      applySheetZoom(1);
       document.querySelectorAll(".selected-cell").forEach((cell) => {
         cell.classList.remove("selected-cell");
       });
@@ -1010,6 +1145,7 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       syncFormStateForSave(document);
 
       const html = "<!doctype html>\n" + document.documentElement.outerHTML;
+      applySheetZoom(savedSheetZoom);
       const blob = new Blob([html], { type: "text/html;charset=utf-8" });
       const link = document.createElement("a");
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
@@ -1103,6 +1239,10 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       textarea.className = input.className;
       textarea.value = input.value || "";
       textarea.setAttribute("aria-label", input.getAttribute("aria-label") || "填写内容");
+      if (input.classList.contains("digits-only")) {
+        textarea.setAttribute("inputmode", "numeric");
+        textarea.setAttribute("pattern", "[0-9]*");
+      }
       input.replaceWith(textarea);
     });
 
@@ -1160,6 +1300,29 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       document.querySelectorAll(".mini-input").forEach(resizeMiniInput);
     });
 
+    function keepDigitsOnly(field) {
+      const originalValue = field.value;
+      const nextValue = originalValue.replace(/\D/g, "");
+
+      if (nextValue === originalValue) {
+        return;
+      }
+
+      const selectionStart = field.selectionStart ?? originalValue.length;
+      const removedBeforeCursor = originalValue.slice(0, selectionStart).replace(/\d/g, "").length;
+      const nextSelectionStart = Math.max(0, selectionStart - removedBeforeCursor);
+
+      field.value = nextValue;
+      field.setSelectionRange(nextSelectionStart, nextSelectionStart);
+    }
+
+    document.querySelectorAll(".digits-only").forEach((field) => {
+      keepDigitsOnly(field);
+      field.addEventListener("input", () => {
+        keepDigitsOnly(field);
+      });
+    });
+
     function focusField(field) {
       try {
         field.focus({ preventScroll: true });
@@ -1177,6 +1340,10 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       });
 
       field.addEventListener("touchstart", (event) => {
+        if (event.touches.length > 1) {
+          return;
+        }
+
         event.stopPropagation();
         focusField(field);
       }, { passive: true });
