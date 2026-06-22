@@ -1014,6 +1014,24 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
     let pinchStartCenter = null;
     let pinchStartScroll = null;
     let isSheetPinching = false;
+    let hasUnsavedChanges = false;
+
+    function markUnsavedChanges() {
+      hasUnsavedChanges = true;
+    }
+
+    function clearUnsavedChanges() {
+      hasUnsavedChanges = false;
+    }
+
+    window.addEventListener("beforeunload", (event) => {
+      if (!hasUnsavedChanges) {
+        return;
+      }
+
+      event.preventDefault();
+      event.returnValue = "";
+    });
 
     function clamp(value, min, max) {
       return Math.min(max, Math.max(min, value));
@@ -1156,6 +1174,7 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       link.click();
       link.remove();
       URL.revokeObjectURL(link.href);
+      clearUnsavedChanges();
     }
 
     saveHtmlButton?.addEventListener("click", saveCurrentHtml);
@@ -1359,6 +1378,7 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
 
       if (canEditWholeCell) {
         cell.contentEditable = "true";
+        cell.addEventListener("input", markUnsavedChanges);
       } else {
         cell.removeAttribute("contenteditable");
       }
@@ -1407,6 +1427,9 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       });
     });
 
+    document.querySelector("form")?.addEventListener("input", markUnsavedChanges);
+    document.querySelector("form")?.addEventListener("change", markUnsavedChanges);
+
     document.querySelectorAll('input[type="radio"]').forEach((radio) => {
       radio.closest("label")?.addEventListener("mousedown", () => {
         radio.dataset.wasChecked = radio.checked ? "true" : "false";
@@ -1419,6 +1442,7 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       radio.addEventListener("click", () => {
         if (radio.dataset.wasChecked === "true") {
           radio.checked = false;
+          markUnsavedChanges();
         }
       });
     });
