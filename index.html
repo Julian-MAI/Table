@@ -600,7 +600,8 @@
 <body>
   <div class="sheet-wrap">
     <div class="toolbar">
-<button class="save-button secondary" type="button" id="saveHtmlButton">保存HTML</button>
+      <button class="save-button secondary" type="button" id="saveHtmlButton">保存HTML</button>
+      <button class="save-button" type="button" id="saveAsHtmlButton">另存为</button>
     </div>
     <form>
       <div class="sheet-viewport" id="sheetViewport">
@@ -1001,6 +1002,7 @@
   <div class="cell-tooltip" id="lockedCellTooltip" role="tooltip" hidden></div>
   <script>
     const saveHtmlButton = document.getElementById("saveHtmlButton");
+    const saveAsHtmlButton = document.getElementById("saveAsHtmlButton");
 const lockedCellTooltip = document.getElementById("lockedCellTooltip");
     const sheetViewport = document.getElementById("sheetViewport");
     const sheetScale = document.getElementById("sheetScale");
@@ -1152,24 +1154,35 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       });
     }
 
-    function saveCurrentHtml() {
+    function createHtmlSnapshot() {
       const savedSheetZoom = sheetZoom;
-      applySheetZoom(1);
-      document.querySelectorAll(".selected-cell").forEach((cell) => {
-        cell.classList.remove("selected-cell");
-      });
-      hideLockedCellTooltip();
 
-      syncFormStateForSave(document);
+      try {
+        applySheetZoom(1);
+        document.querySelectorAll(".selected-cell").forEach((cell) => {
+          cell.classList.remove("selected-cell");
+        });
+        hideLockedCellTooltip();
+        syncFormStateForSave(document);
 
-      const html = "<!doctype html>\n" + document.documentElement.outerHTML;
-      applySheetZoom(savedSheetZoom);
-      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-      const link = document.createElement("a");
+        return "<!doctype html>\n" + document.documentElement.outerHTML;
+      } finally {
+        applySheetZoom(savedSheetZoom);
+      }
+    }
+
+    function createDefaultHtmlFileName() {
       const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
 
+      return `product-form-${timestamp}.html`;
+    }
+
+    function downloadHtml(html, fileName) {
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const link = document.createElement("a");
+
       link.href = URL.createObjectURL(blob);
-      link.download = `product-form-${timestamp}.html`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1177,7 +1190,46 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       clearUnsavedChanges();
     }
 
+    function saveCurrentHtml() {
+      downloadHtml(createHtmlSnapshot(), createDefaultHtmlFileName());
+    }
+
+    async function saveAsCurrentHtml() {
+      const html = createHtmlSnapshot();
+      const fileName = createDefaultHtmlFileName();
+
+      if (!window.showSaveFilePicker) {
+        downloadHtml(html, fileName);
+        return;
+      }
+
+      try {
+        const fileHandle = await window.showSaveFilePicker({
+          suggestedName: fileName,
+          types: [
+            {
+              description: "HTML 文件",
+              accept: { "text/html": [".html", ".htm"] },
+            },
+          ],
+        });
+        const writable = await fileHandle.createWritable();
+
+        await writable.write(new Blob([html], { type: "text/html;charset=utf-8" }));
+        await writable.close();
+        clearUnsavedChanges();
+      } catch (error) {
+        if (error.name === "AbortError") {
+          return;
+        }
+
+        console.error(error);
+        downloadHtml(html, fileName);
+      }
+    }
+
     saveHtmlButton?.addEventListener("click", saveCurrentHtml);
+    saveAsHtmlButton?.addEventListener("click", saveAsCurrentHtml);
 
     document.addEventListener("keydown", (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
