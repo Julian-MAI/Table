@@ -248,6 +248,10 @@
       min-height: 32px;
       display: block;
       text-align: left;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: pre-wrap;
     }
 
     .mini-input {
@@ -296,6 +300,26 @@
 
     .mini-input.month-input {
       width: 56px;
+    }
+
+    .distribution-default-input {
+      width: 88px;
+      min-width: 88px;
+    }
+
+    .distribution-disabled {
+      background: #f3f5f8;
+      color: #777;
+      cursor: not-allowed;
+    }
+
+    .distribution-disabled label {
+      cursor: not-allowed;
+    }
+
+    .distribution-default-input:disabled {
+      color: #777;
+      cursor: not-allowed;
     }
 
     .inline-blank {
@@ -819,11 +843,11 @@
         </tr>
         <tr>
           <td class="label">投资目标</td>
-          <td colspan="7"><input class="line-input" type="text" aria-label="投资目标"></td>
+          <td colspan="7" aria-label="投资目标"></td>
         </tr>
         <tr>
           <td class="label">投资范围</td>
-          <td colspan="7"><input class="line-input" type="text" aria-label="投资范围"></td>
+          <td colspan="7" aria-label="投资范围"></td>
         </tr>
         <tr>
           <td class="label">资产配置比例</td>
@@ -831,7 +855,7 @@
         </tr>
         <tr>
           <td class="label">投资策略</td>
-          <td colspan="7"><input class="line-input" type="text" aria-label="投资策略"></td>
+          <td colspan="7" aria-label="投资策略"></td>
         </tr>
         <tr>
           <td class="label">投资限制</td>
@@ -971,7 +995,7 @@
         <tr class="xl">
           <td class="label">收益分配 <span class="note">（管理人确认）</span></td>
           <td colspan="7" class="small">
-            <span class="note">注：</span>1、收益分配方式为现金分红或红利再投资两种方式，默认为<span class="note">现金分红（请管理人确认）</span>；<br>
+            <span class="note">注：</span>1、收益分配方式为现金分红或红利再投资两种方式，默认为【<input class="mini-input distribution-default-input" type="text" value="现金分红" aria-label="默认收益分配方式">】<span class="note">（请管理人确认）</span>；<br>
             2、基金收益分配后基金份额净值不能低于面值；即基金收益分配基准日的基金份额净值减去每单位基金份额收益分配金额后不能低于面值；<br>
             3、对于红利再投资份额视作在红利再投日新增申购份额（不收取申购费），该新增申购份额适用于本合同约定的基金份额不允许赎回期限（<span class="note">如有</span>）限制及按照本合同约定收取赎回费（<span class="note">如有</span>）。
           </td>
@@ -984,15 +1008,15 @@
         </tr>
         <tr class="tall">
           <td class="center">
-            <label><input type="radio" name="distribution" checked>是</label>
-            <label><input type="radio" name="distribution">否</label>
+            <label><input type="radio" name="distribution" value="yes" checked>是</label>
+            <label><input type="radio" name="distribution" value="no">否</label>
           </td>
-          <td>
-            <label><input type="radio" name="distributionType" checked>现金分红</label><br>
-            <label><input type="radio" name="distributionType">红利再投资</label>
+          <td data-distribution-detail>
+            <label><input type="radio" name="distributionType" value="现金分红" checked>现金分红</label><br>
+            <label><input type="radio" name="distributionType" value="红利再投资">红利再投资</label>
           </td>
-          <td colspan="4" class="center">管理人自行决定</td>
-          <td colspan="2" class="center">2次</td>
+          <td colspan="4" class="center" data-distribution-detail>管理人自行决定</td>
+          <td colspan="2" class="center" data-distribution-detail>2次</td>
         </tr>
       </table>
       </div>
@@ -1350,11 +1374,22 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
       const nextWidth = Math.min(maxWidth, valueLength === 0 ? emptyWidth : (valueLength + 1) * 8);
 
       input.style.width = `${nextWidth}px`;
+      resizeTextInputHeight(input);
+    }
+
+    function resizeTextInputHeight(input) {
       requestAnimationFrame(() => {
         input.style.height = "auto";
         input.style.height = `${input.scrollHeight}px`;
       });
     }
+
+    document.querySelectorAll(".line-input").forEach((input) => {
+      resizeTextInputHeight(input);
+      input.addEventListener("input", () => {
+        resizeTextInputHeight(input);
+      });
+    });
 
     document.querySelectorAll(".mini-input").forEach((input) => {
       input.placeholder = "";
@@ -1368,6 +1403,7 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
     });
 
     window.addEventListener("resize", () => {
+      document.querySelectorAll(".line-input").forEach(resizeTextInputHeight);
       document.querySelectorAll(".mini-input").forEach(resizeMiniInput);
     });
 
@@ -1393,6 +1429,85 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
         keepDigitsOnly(field);
       });
     });
+
+    const distributionDefaultInput = document.querySelector(".distribution-default-input");
+    const distributionRadios = document.querySelectorAll('input[name="distribution"]');
+    const distributionTypeRadios = document.querySelectorAll('input[name="distributionType"]');
+    const distributionDetailCells = document.querySelectorAll("[data-distribution-detail]");
+
+    function syncDistributionDefaultFromType() {
+      const selectedType = document.querySelector('input[name="distributionType"]:checked');
+
+      if (!distributionDefaultInput || !selectedType) {
+        return;
+      }
+
+      distributionDefaultInput.value = selectedType.value;
+      resizeMiniInput(distributionDefaultInput);
+    }
+
+    function syncDistributionTypeFromDefault() {
+      if (!distributionDefaultInput) {
+        return;
+      }
+
+      const matchedType = Array.from(distributionTypeRadios).find((radio) => radio.value === distributionDefaultInput.value.trim());
+
+      if (matchedType) {
+        matchedType.checked = true;
+      }
+    }
+
+    function syncDistributionEnabledState() {
+      const shouldDistribute = document.querySelector('input[name="distribution"]:checked')?.value !== "no";
+
+      if (shouldDistribute) {
+        syncDistributionTypeFromDefault();
+      }
+
+      if (distributionDefaultInput) {
+        distributionDefaultInput.disabled = !shouldDistribute;
+      }
+
+      distributionTypeRadios.forEach((radio) => {
+        radio.disabled = !shouldDistribute;
+        if (!shouldDistribute) {
+          radio.checked = false;
+        }
+      });
+
+      distributionDetailCells.forEach((cell) => {
+        cell.classList.toggle("distribution-disabled", !shouldDistribute);
+        cell.querySelectorAll("input, textarea, select, button").forEach((field) => {
+          field.disabled = !shouldDistribute;
+        });
+        if (!cell.querySelector("input, textarea, select, button")) {
+          if (shouldDistribute) {
+            cell.contentEditable = "true";
+          } else {
+            cell.removeAttribute("contenteditable");
+          }
+        }
+      });
+    }
+
+    distributionTypeRadios.forEach((radio) => {
+      radio.addEventListener("change", syncDistributionDefaultFromType);
+    });
+
+    distributionDefaultInput?.addEventListener("input", () => {
+      resizeMiniInput(distributionDefaultInput);
+      syncDistributionTypeFromDefault();
+    });
+
+    distributionRadios.forEach((radio) => {
+      radio.addEventListener("change", syncDistributionEnabledState);
+      radio.addEventListener("click", () => {
+        requestAnimationFrame(syncDistributionEnabledState);
+      });
+    });
+
+    syncDistributionEnabledState();
 
     function focusField(field) {
       try {
@@ -1426,7 +1541,9 @@ const lockedCellTooltip = document.getElementById("lockedCellTooltip");
 
     document.querySelectorAll(".sheet td").forEach((cell, index) => {
       const hasInteractiveContent = cell.querySelector('input, textarea, .cell-editor, .inline-blank');
-      const canEditWholeCell = !cell.classList.contains("label") && !cell.classList.contains("subhead") && !hasInteractiveContent;
+      const isDisabledDistributionDetail = cell.hasAttribute("data-distribution-detail")
+        && document.querySelector('input[name="distribution"]:checked')?.value === "no";
+      const canEditWholeCell = !cell.classList.contains("label") && !cell.classList.contains("subhead") && !hasInteractiveContent && !isDisabledDistributionDetail;
 
       if (canEditWholeCell) {
         cell.contentEditable = "true";
